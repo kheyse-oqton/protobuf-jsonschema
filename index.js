@@ -1,7 +1,7 @@
-var parseSchema = require('protocol-buffers-schema');
-var primitive = require('./types');
-var fs = require('fs');
-var path = require('path');
+const parseSchema = require('protocol-buffers-schema');
+const primitive = require('./types');
+const fs = require('fs');
+const path = require('path');
 
 function Compiler(filename, importPaths) {
   this.messages = {};
@@ -9,16 +9,16 @@ function Compiler(filename, importPaths) {
   this.schema = this.open(filename, importPaths);
 }
 
-Compiler.prototype.open = function(filename, importPaths) {
+Compiler.prototype.open = function (filename, importPaths) {
   if (!/\.proto$/i.test(filename) && !fs.existsSync(filename)) {
     filename += '.proto';
   }
 
-  var schema = parseSchema(fs.readFileSync(filename, 'utf-8'));
+  const schema = parseSchema(fs.readFileSync(filename, 'utf-8'));
   this.visit(schema, schema.package || '');
-  schema.imports.forEach(function(lib) {
-    var found = false;
-    for (var i=0, len=importPaths.length; i<len; i++) {
+  schema.imports.forEach(function (lib) {
+    let found = false;
+    for (let i = 0, len = importPaths.length; i < len; i++) {
       try {
         try {
           this.open(path.resolve(importPaths[i], lib), importPaths);
@@ -31,17 +31,17 @@ Compiler.prototype.open = function(filename, importPaths) {
             found = true;
             continue;
           }
-          throw(err);
+          throw (err);
         }
       } catch (err) {
         if (err.code === 'ENOENT') {
           continue;
         }
-        throw(err);
+        throw (err);
       }
     }
     if (!found) {
-      throw new Error(lib + ' could not be found in any of\n' + importPaths.map(function(p) { return '\t' + path.resolve(p, lib) }).join('\n'));
+      throw new Error(`${lib} could not be found in any of\n${importPaths.map(p => `\t${path.resolve(p, lib)}`).join('\n')}`);
     }
   }, this);
 
@@ -51,9 +51,9 @@ Compiler.prototype.open = function(filename, importPaths) {
 /**
  * Visits a schema in the tree, and assigns messages and enums to the lookup tables.
  */
-Compiler.prototype.visit = function(schema, prefix) {
+Compiler.prototype.visit = function (schema, prefix) {
   if (schema.enums) {
-    schema.enums.forEach(function(e) {
+    schema.enums.forEach(function (e) {
       e.id = prefix + (prefix ? '.' : '') + (e.id || e.name);
       this.enums[e.id] = e;
       this.visit(e, e.id);
@@ -61,7 +61,7 @@ Compiler.prototype.visit = function(schema, prefix) {
   }
 
   if (schema.messages) {
-    schema.messages.forEach(function(m) {
+    schema.messages.forEach(function (m) {
       m.id = prefix + (prefix ? '.' : '') + (m.id || m.name);
       this.messages[m.id] = m;
       this.visit(m, m.id);
@@ -74,7 +74,7 @@ Compiler.prototype.visit = function(schema, prefix) {
  * compiles just that type and its dependencies. Otherwise,
  * compiles all types in the file.
  */
-Compiler.prototype.compile = function(type) {
+Compiler.prototype.compile = function (type) {
   this.root = {
     definitions: {},
     used: {}
@@ -83,11 +83,11 @@ Compiler.prototype.compile = function(type) {
   if (type) {
     this.resolve(type, '');
   } else {
-    this.schema.messages.forEach(function(message) {
+    this.schema.messages.forEach(function (message) {
       this.resolve(message.id, '');
     }, this);
 
-    this.schema.enums.forEach(function(e) {
+    this.schema.enums.forEach(function (e) {
       this.resolve(e.id, '');
     }, this);
   }
@@ -100,65 +100,59 @@ Compiler.prototype.compile = function(type) {
  * Resolves a type name at the given path in the schema tree.
  * Returns a compiled JSON schema.
  */
-Compiler.prototype.resolve = function(type, from, base, key) {
-  if (primitive[type])
-    return primitive[type];
+Compiler.prototype.resolve = function (type, from, base, key) {
+  if (primitive[type]) { return primitive[type]; }
 
-  var lookup = from.split('.');
-  for (var i = lookup.length; i >= 0; i--) {
-    var id = lookup.slice(0, i).concat(type).join('.');
+  const lookup = from.split('.');
+  for (let i = lookup.length; i >= 0; i--) {
+    const id = lookup.slice(0, i).concat(type).join('.');
 
     // If this type was used before, move it from inline to a reusable definition
     if (this.root.used[id] && !this.root.definitions[id]) {
-      var k = this.root.used[id];
+      const k = this.root.used[id];
       this.root.definitions[id] = k[0][k[1]];
-      k[0][k[1]] = { $ref: '#/definitions/' + id };
+      k[0][k[1]] = { $ref: `#/definitions/${id}` };
     }
 
     // If already defined, reuse
-    if (this.root.definitions[id])
-      return { $ref: '#/definitions/' + id };
+    if (this.root.definitions[id]) { return { $ref: `#/definitions/${id}` }; }
 
     // Compile the message or enum
     var res;
-    if (this.messages[id])
-      res = this.compileMessage(this.messages[id]);
+    if (this.messages[id]) { res = this.compileMessage(this.messages[id]); }
 
-    if (this.enums[id])
-      res = this.compileEnum(this.enums[id]);
+    if (this.enums[id]) { res = this.compileEnum(this.enums[id]); }
 
     if (res) {
       // If used, or at the root level, make a definition
       if (this.root.used[id] || !base) {
         this.root.definitions[id] = res;
-        res = { $ref: '#/definitions/' + id };
+        res = { $ref: `#/definitions/${id}` };
       }
-      
+
       // Mark as used if not an Enum
-      if (base && !this.root.used[id] && !this.enums[id])
-        this.root.used[id] = [base, key];
+      if (base && !this.root.used[id] && !this.enums[id]) { this.root.used[id] = [base, key]; }
 
       return res;
     }
   }
 
-  throw new Error('Could not resolve ' + type);
+  throw new Error(`Could not resolve ${type}`);
 };
 
 /**
  * Compiles and assigns a type
  */
-Compiler.prototype.build = function(type, from, base, key) {
-  var res = this.resolve(type, from, base, key);
-  if (base)
-    base[key] = res;
+Compiler.prototype.build = function (type, from, base, key) {
+  const res = this.resolve(type, from, base, key);
+  if (base) { base[key] = res; }
 };
 
 /**
  * Compiles a protobuf enum to JSON schema
  */
-Compiler.prototype.compileEnum = function(enumType, root) {
-  var res = {
+Compiler.prototype.compileEnum = function (enumType, root) {
+  const res = {
     title: enumType.name,
     type: 'string',
     enum: Object.keys(enumType.values)
@@ -167,52 +161,50 @@ Compiler.prototype.compileEnum = function(enumType, root) {
   return res;
 };
 
+function snakeToCamel(s) {
+  return s.replace(/(\_\w)/g, m => m[1].toUpperCase());
+}
 /**
  * Compiles a protobuf message to JSON schema
  */
-Compiler.prototype.compileMessage = function(message, root) {
-  var res = {
+Compiler.prototype.compileMessage = function (message, root) {
+  const res = {
     title: message.name,
     type: 'object',
     properties: {},
-    required: []
+    required: [],
+    additionalProperties: false
   };
 
-  message.fields.forEach(function(field) {
+  message.fields.forEach(function (field) {
     if (field.map) {
-      if (field.map.from !== 'string')
-        throw new Error('Can only use strings as map keys at ' + message.id + '.' + field.name);
-
-      var f = res.properties[field.name] = {
+      if (field.map.from !== 'string') { throw new Error(`Can only use strings as map keys at ${message.id}.${field.name}`); }
+      var f = res.properties[snakeToCamel(field.name)] = {
         type: 'object',
         additionalProperties: null
       };
 
       this.build(field.map.to, message.id, f, 'additionalProperties');
-    } else {
-      if (field.repeated) {
-        var f = res.properties[field.name] = {
-          type: 'array',
-          items: null
-        };
+    } else if (field.repeated) {
+      var f = res.properties[field.name] = {
+        type: 'array',
+        items: null
+      };
 
-        this.build(field.type, message.id, f, 'items');
-      } else {
-        this.build(field.type, message.id, res.properties, field.name);
-      }
+      this.build(field.type, message.id, f, 'items');
+    } else {
+      this.build(field.type, message.id, res.properties, snakeToCamel(field.name));
     }
 
-    if (field.required)
-      res.required.push(field.name);
+    if (field.required) { res.required.push(snakeToCamel(field.name)); }
   }, this);
 
-  if (res.required.length === 0)
-    delete res.required;
+  if (res.required.length === 0) { delete res.required; }
 
   return res;
 };
 
-module.exports = function(filename, model, importPaths) {
-  var compiler = new Compiler(filename, importPaths);
+module.exports = function (filename, model, importPaths) {
+  const compiler = new Compiler(filename, importPaths);
   return compiler.compile(model);
 };
