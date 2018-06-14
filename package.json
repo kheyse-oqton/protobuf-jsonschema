@@ -28,7 +28,7 @@
   "dependencies": {
     "commander": "^2.9.0",
     "js-yaml": "^3.4.6",
-    "protocol-buffers-schema": "^3.1.1"
+    "protocol-buffers-schema": "https://github.com/kheyse-oqton/protocol-buffers-schema.git#feature/options_object"
   },
   "devDependencies": {
     "mocha": "^2.3.4"
