@@ -186,7 +186,7 @@ Compiler.prototype.compileMessage = function (message, root) {
 
       this.build(field.map.to, message.id, f, 'additionalProperties');
     } else if (field.repeated) {
-      var f = res.properties[field.name] = {
+      var f = res.properties[snakeToCamel(field.name)] = {
         type: 'array',
         items: null
       };
